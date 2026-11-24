@@ -3,10 +3,12 @@ package com.instafav.app
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Base64
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -17,6 +19,7 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -143,6 +146,37 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (ok) {
                         Toast.makeText(this@MainActivity, "갤러리에 원본 사진이 저장되었어요!", Toast.LENGTH_SHORT).show()
+                        webView.evaluateJavascript(
+                            "window.__igOnDownloadResult && window.__igOnDownloadResult(true);",
+                            null
+                        )
+                    } else {
+                        // 직접 연결 실패 시 WebView 내부 fetch 폴백 시도
+                        val safeUrl = JSONObject.quote(imageUrl)
+                        val safeName = JSONObject.quote(filename)
+                        webView.evaluateJavascript(
+                            "window.__igFallbackFetch && window.__igFallbackFetch($safeUrl, $safeName);",
+                            null
+                        )
+                    }
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun saveBase64Image(dataUrl: String, filename: String) {
+            ioExecutor.execute {
+                val ok = try {
+                    val base64Part = dataUrl.substringAfter(",", dataUrl)
+                    val bytes = Base64.decode(base64Part, Base64.DEFAULT)
+                    writeImageBytesToGallery(bytes, filename)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
+                runOnUiThread {
+                    if (ok) {
+                        Toast.makeText(this@MainActivity, "갤러리에 원본 사진이 저장되었어요!", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(this@MainActivity, "사진 저장에 실패했어요.", Toast.LENGTH_SHORT).show()
                     }
@@ -163,7 +197,10 @@ class MainActivity : AppCompatActivity() {
                 connectTimeout = 15000
                 readTimeout = 20000
                 requestMethod = "GET"
+                instanceFollowRedirects = true
                 setRequestProperty("User-Agent", mobileUserAgent)
+                setRequestProperty("Referer", "https://www.instagram.com/")
+                setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
                 val cookies = CookieManager.getInstance().getCookie(imageUrl)
                 if (!cookies.isNullOrEmpty()) {
                     setRequestProperty("Cookie", cookies)
@@ -172,13 +209,24 @@ class MainActivity : AppCompatActivity() {
 
             if (connection.responseCode !in 200..299) return false
 
+            val bytes = connection.inputStream.use { it.readBytes() }
+            if (bytes.isEmpty()) return false
+            writeImageBytesToGallery(bytes, filename)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun writeImageBytesToGallery(bytes: ByteArray, filename: String): Boolean {
+        return try {
             val mimeType = when {
                 filename.endsWith(".png", ignoreCase = true) -> "image/png"
                 filename.endsWith(".webp", ignoreCase = true) -> "image/webp"
                 else -> "image/jpeg"
             }
-
-            val bytes = connection.inputStream.use { it.readBytes() }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
@@ -207,13 +255,12 @@ class MainActivity : AppCompatActivity() {
                 if (!dir.exists()) dir.mkdirs()
                 val file = File(dir, filename)
                 FileOutputStream(file).use { it.write(bytes) }
+                MediaScannerConnection.scanFile(this, arrayOf(file.absolutePath), arrayOf(mimeType), null)
                 true
             }
         } catch (e: Exception) {
             e.printStackTrace()
             false
-        } finally {
-            connection?.disconnect()
         }
     }
 }

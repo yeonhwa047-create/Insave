@@ -31,6 +31,7 @@
     } catch (e) {}
   }
 
+  // 1. 플로팅 토글 동글 버튼 (FAB)
   const fab = document.createElement("button");
   fab.id = "ig-fav-fab";
   fab.type = "button";
@@ -83,6 +84,7 @@
     container.classList.toggle("visible", isVisible);
   });
 
+  // 2. 플로팅 즐겨찾기 패널
   const container = document.createElement("div");
   container.id = "ig-fav-floating";
   container.className = "dark";
@@ -235,6 +237,9 @@
   applyTheme(isDark);
   renderList();
 
+  // ==========================================
+  // 3. 게시물 사진 클릭 시 원본 화질 갤러리 저장 버튼
+  // ==========================================
   const saveBtn = document.createElement("button");
   saveBtn.id = "ig-photo-save-btn";
   saveBtn.type = "button";
@@ -248,7 +253,8 @@
     if (!img) return true;
     const alt = (img.alt || "").toLowerCase();
     if (alt.includes("프로필 사진") || alt.includes("profile picture")) return true;
-    if (img.closest("header") && img.getBoundingClientRect().width < 180) return true;
+    const r = img.getBoundingClientRect();
+    if (img.closest("header") && r.width < 180) return true;
     if (img.closest("#ig-fav-floating")) return true;
     return false;
   }
@@ -300,6 +306,10 @@
   }
 
   function findOpenedPhotoImage() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // 1) 팝업 모달 (div[role="dialog"])
     const dialogs = Array.from(document.querySelectorAll('div[role="dialog"]'));
     for (let i = dialogs.length - 1; i >= 0; i--) {
       const dialog = dialogs[i];
@@ -310,8 +320,8 @@
         if (isProfileAvatar(img)) return false;
         const r = img.getBoundingClientRect();
         if (r.width < 180 || r.height < 180) return false;
-        const visibleWidth = Math.min(r.right, dRect.right, window.innerWidth) - Math.max(r.left, dRect.left, 0);
-        return visibleWidth > r.width * 0.5;
+        const visibleWidth = Math.min(r.right, dRect.right, vw) - Math.max(r.left, dRect.left, 0);
+        return visibleWidth > r.width * 0.45;
       });
 
       if (imgs.length > 0) {
@@ -324,24 +334,29 @@
       }
     }
 
-    const isPostPage = /^\/(p|reel)\//.test(window.location.pathname);
-    if (isPostPage) {
-      const minW = Math.min(240, window.innerWidth * 0.65);
-      const imgs = Array.from(document.querySelectorAll("article img, main img")).filter((img) => {
-        if (isProfileAvatar(img)) return false;
-        const r = img.getBoundingClientRect();
-        if (r.width < minW || r.height < 180) return false;
-        return r.bottom > 80 && r.top < window.innerHeight - 80;
-      });
+    // 2) 게시물 상세 페이지 (/p/... 또는 /{username}/p/... 또는 /reel/...) 및 큰 피드 게시물(<article>)
+    const path = window.location.pathname;
+    const isPostPage = /\/(p|reel|stories)\//.test(path);
+    const minW = Math.min(260, vw * 0.65);
 
-      if (imgs.length > 0) {
-        const vpCenterY = window.innerHeight / 2;
-        imgs.sort((a, b) => {
-          const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-          return Math.abs((ra.top + ra.height / 2) - vpCenterY) - Math.abs((rb.top + rb.height / 2) - vpCenterY);
-        });
-        return imgs[0];
-      }
+    const selector = isPostPage ? "article img, main img, section img" : "article img";
+    const imgs = Array.from(document.querySelectorAll(selector)).filter((img) => {
+      if (isProfileAvatar(img)) return false;
+      const r = img.getBoundingClientRect();
+      if (r.width < minW || r.height < 180) return false;
+      const visibleLeft = Math.max(r.left, 0);
+      const visibleRight = Math.min(r.right, vw);
+      if (visibleRight - visibleLeft < r.width * 0.45) return false;
+      return r.bottom > 80 && r.top < vh - 80;
+    });
+
+    if (imgs.length > 0) {
+      const vpCenterY = vh / 2;
+      imgs.sort((a, b) => {
+        const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+        return Math.abs((ra.top + ra.height / 2) - vpCenterY) - Math.abs((rb.top + rb.height / 2) - vpCenterY);
+      });
+      return imgs[0];
     }
 
     return null;
@@ -368,8 +383,8 @@
     activePhotoImg = img;
     saveBtn.classList.add("visible");
 
-    const btnWidth = saveBtn.offsetWidth || 100;
-    const top = Math.max(52, rect.top + 12);
+    const btnWidth = saveBtn.offsetWidth || 104;
+    const top = Math.max(52, Math.min(window.innerHeight - 130, rect.top + 12));
     const left = Math.min(window.innerWidth - btnWidth - 12, Math.max(12, rect.right - btnWidth - 12));
 
     saveBtn.style.top = `${top}px`;
@@ -382,6 +397,28 @@
       requestAnimationFrame(updateSaveButtonPosition);
     }
   }
+
+  // 안드로이드에서 직접 다운로드 실패 시 JS fetch로 폴백
+  window.__igFallbackFetch = async (url, filename) => {
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result;
+        if (typeof dataUrl === "string" && window.AndroidBridge && window.AndroidBridge.saveBase64Image) {
+          window.AndroidBridge.saveBase64Image(dataUrl, filename);
+        } else {
+          window.__igOnDownloadResult(false);
+        }
+      };
+      reader.onerror = () => window.__igOnDownloadResult(false);
+      reader.readAsDataURL(blob);
+    } catch (e) {
+      window.__igOnDownloadResult(false);
+    }
+  };
 
   window.__igOnDownloadResult = (ok) => {
     const labelEl = saveBtn.querySelector(".ig-save-label");
@@ -422,5 +459,5 @@
   window.addEventListener("scroll", scheduleUpdate, true);
   window.addEventListener("resize", scheduleUpdate);
   document.addEventListener("touchend", () => setTimeout(scheduleUpdate, 220), true);
-  setInterval(scheduleUpdate, 700);
+  setInterval(scheduleUpdate, 600);
 })();

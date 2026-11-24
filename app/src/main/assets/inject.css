@@ -3,7 +3,7 @@
   position: fixed;
   right: 16px;
   bottom: 76px;
-  z-index: 999998;
+  z-index: 2147483645;
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -19,6 +19,7 @@
   user-select: none;
   touch-action: none;
   padding: 0;
+  pointer-events: auto;
 }
 
 #ig-fav-fab:active {
@@ -31,7 +32,7 @@
   left: 50%;
   bottom: 136px;
   transform: translateX(-50%);
-  z-index: 999999;
+  z-index: 2147483646;
   display: none;
   flex-direction: column;
   align-items: center;
@@ -46,6 +47,7 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   user-select: none;
   box-sizing: border-box;
+  pointer-events: auto;
 }
 
 #ig-fav-floating.dark {
@@ -240,22 +242,24 @@
 /* 게시물 사진 위 원본 저장 버튼 */
 #ig-photo-save-btn {
   position: fixed;
-  z-index: 1000000;
+  z-index: 2147483647;
   display: none;
   align-items: center;
   gap: 5px;
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 9px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 999px;
-  background: rgba(24, 24, 27, 0.84);
+  background: rgba(24, 24, 27, 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   user-select: none;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 #ig-photo-save-btn.visible {
@@ -264,5 +268,5 @@
 
 #ig-photo-save-btn.saved {
   background: #10b981;
-  border-color: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.5);
 }
