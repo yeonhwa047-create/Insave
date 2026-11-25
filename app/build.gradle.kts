@@ -7,16 +7,30 @@ android {
     namespace = "com.instafav.app"
     compileSdk = 35
 
+    signingConfigs {
+        create("fixed") {
+            storeFile = file("instafav.keystore")
+            storePassword = "instafav1234"
+            keyAlias = "instafav"
+            keyPassword = "instafav1234"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.instafav.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        val runNum = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+        versionCode = 10 + runNum
+        versionName = if (runNum > 0) "1.3.$runNum" else "1.3"
     }
 
     buildTypes {
-        release {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("fixed")
+        }
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("fixed")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
